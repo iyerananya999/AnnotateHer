@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AnnotateHer — Reveal Who's Missing</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #f9f7f3;
+    --paper:    #fdfcfa;
+    --ink:      #1c1c1c;
+    --ink-light:#5a5a5a;
+    --ink-dim:  #aaa;
+    --rule:     #e5e1d8;
+    --red:      #b91c1c;
+    --blue:     #1d4ed8;
+    --purple:   #5b21b6;
+    --red-soft: rgba(185,28,28,0.08);
+    --blue-soft:rgba(29,78,216,0.08);
+    --purple-soft:rgba(91,33,182,0.08);
+  }
+
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Lora', Georgia, serif;
+    background: var(--bg);
+    color: var(--ink);
+    overflow-x: hidden;
+  }
+
+  /* ── subtle paper grain overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    position: sticky; top: 0; z-index: 200;
+    height: 52px;
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+    display: flex; align-items: center;
+    padding: 0 40px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+  }
+  .logo {
+    font-family: 'Lora', serif;
+    font-size: 17px; font-weight: 600;
+    letter-spacing: -0.3px;
+    color: var(--ink);
+    text-decoration: none;
+    margin-right: auto;
+  }
+  .logo em { font-style: italic; color: var(--red); }
+
+  .nav-links {
+    display: flex; gap: 28px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px; font-weight: 500;
+    color: var(--ink-light);
+    list-style: none;
+  }
+  .nav-links a { color: inherit; text-decoration: none; transition: color 0.2s; }
+  .nav-links a:hover { color: var(--ink); }
+
+  .btn-nav {
+    margin-left: 28px;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.6px; text-transform: uppercase;
+    background: var(--ink);
+    color: var(--paper);
+    border: none; padding: 8px 18px;
+    border-radius: 5px; cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s, transform 0.15s;
+  }
+  .btn-nav:hover { background: #333; transform: translateY(-1px); }
+
+  /* ── HERO ── */
+  .hero {
+    position: relative;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 96px 40px 80px;
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 60px;
+    align-items: center;
+    z-index: 1;
+  }
+
+  .hero-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    letter-spacing: 2.5px; text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 18px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .hero-eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 28px; height: 1.5px;
+    background: var(--red);
+  }
+
+  h1.hero-title {
+    font-family: 'Lora', serif;
+    font-size: clamp(36px, 5vw, 54px);
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -1px;
+    color: var(--ink);
+    margin-bottom: 22px;
+  }
+  h1.hero-title em {
+    font-style: italic;
+    color: var(--red);
+  }
+
+  .hero-sub {
+    font-family: 'Lora', serif;
+    font-size: 17px;
+    line-height: 1.75;
+    color: var(--ink-light);
+    max-width: 480px;
+    margin-bottom: 40px;
+  }
+
+  .hero-cta-group {
+    display: flex; align-items: center; gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .btn-upload {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px; font-weight: 600;
+    letter-spacing: 0.3px;
+    background: var(--red);
+    color: white;
+    border: none;
+    padding: 14px 28px;
+    border-radius: 7px;
+    cursor: pointer;
+    text-decoration: none;
+    box-shadow: 0 4px 18px rgba(185,28,28,0.28);
+    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  }
+  .btn-upload:hover {
+    background: #991b1b;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(185,28,28,0.35);
+  }
+  .btn-upload svg { flex-shrink: 0; }
+
+  .hero-note {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px; color: var(--ink-dim);
+    line-height: 1.5;
+  }
+
+  /* ── HERO VISUAL (right column) — stacked node-cards ── */
+  .hero-visual {
+    position: relative;
+    height: 320px;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .node-float {
+    position: absolute;
+    font-family: 'Inter', sans-serif;
+    font-size: 11.5px; font-weight: 600;
+    padding: 7px 16px;
+    border-radius: 7px;
+    white-space: nowrap;
+    opacity: 0;
+    animation: floatIn 0.7s ease forwards;
+  }
+  .node-float.mentioned {
+    color: var(--blue);
+    background: var(--blue-soft);
+    border: 1.5px solid rgba(29,78,216,0.25);
+  }
+  .node-float.missing {
+    color: var(--red);
+    background: var(--red-soft);
+    border: 2px solid rgba(185,28,28,0.35);
+  }
+  .node-float.concept {
+    color: var(--purple);
+    background: var(--purple-soft);
+    border: 1.5px solid rgba(91,33,182,0.22);
+  }
+  .node-sub {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; font-weight: 400;
+    opacity: 0.6;
+    margin-top: 2px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+  .connector {
+    position: absolute;
+    background: none;
+    border: none;
+  }
+
+  @keyframes floatIn {
+    from { opacity:0; transform: translateY(10px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+  @keyframes floatDrift {
+    0%,100% { transform: translateY(0px); }
+    50%     { transform: translateY(-5px); }
+  }
+  .node-float { animation: floatIn 0.7s ease forwards, floatDrift 6s ease-in-out 0.7s infinite; }
+
+  /* connector lines via SVG */
+  .hero-visual svg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    max-width: 1100px; margin: 0 auto;
+    padding: 0 40px;
+    border-top: 1px solid var(--rule);
+    position: relative; z-index: 1;
+  }
+
+  /* ── SECTION HEADER ── */
+  .section-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 9.5px; font-weight: 600;
+    letter-spacing: 2.2px; text-transform: uppercase;
+    color: var(--ink-dim);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1; height: 1px;
+    background: var(--rule);
+  }
+
+  /* ── WOMEN CARDS SECTION ── */
+  .cards-section {
+    max-width: 1100px; margin: 0 auto;
+    padding: 56px 40px 80px;
+    position: relative; z-index: 1;
+  }
+
+  .cards-intro {
+    margin: 16px 0 40px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .cards-intro p {
+    font-family: 'Lora', serif;
+    font-size: 15px; line-height: 1.75;
+    color: var(--ink-light);
+    max-width: 560px;
+  }
+  .cards-filter {
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .filter-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    letter-spacing: 0.4px; text-transform: uppercase;
+    padding: 5px 13px; border-radius: 20px;
+    border: 1px solid var(--rule);
+    background: transparent; color: var(--ink-light);
+    cursor: pointer; transition: all 0.18s;
+  }
+  .filter-btn:hover, .filter-btn.active {
+    border-color: var(--red);
+    color: var(--red);
+    background: var(--red-soft);
+  }
+
+  /* ── CARDS GRID ── */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+  }
+
+  .woman-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 22px 24px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s;
+    opacity: 0;
+    animation: cardReveal 0.55s ease forwards;
+  }
+  .woman-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 36px rgba(0,0,0,0.09);
+    border-color: rgba(185,28,28,0.25);
+  }
+  .woman-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2.5px;
+    background: var(--red);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+  }
+  .woman-card:hover::before { transform: scaleX(1); }
+
+  @keyframes cardReveal {
+    from { opacity:0; transform: translateY(16px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+
+  .card-field {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 500;
+    letter-spacing: 1.6px; text-transform: uppercase;
+    color: var(--ink-dim);
+    margin-bottom: 4px;
+  }
+
+  .card-name {
+    font-family: 'Lora', serif;
+    font-size: 18px; font-weight: 600;
+    line-height: 1.2;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+
+  .card-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--red);
+    margin-bottom: 14px;
+  }
+
+  .card-erasure {
+    font-family: 'Lora', serif;
+    font-style: italic;
+    font-size: 13px; line-height: 1.65;
+    color: var(--ink-light);
+    margin-bottom: 16px;
+    border-left: 2px solid rgba(185,28,28,0.25);
+    padding-left: 12px;
+  }
+
+  .card-concepts {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .concept-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; font-weight: 500;
+    padding: 3px 10px; border-radius: 20px;
+    background: var(--purple-soft);
+    color: var(--purple);
+    border: 1px solid rgba(91,33,182,0.18);
+    letter-spacing: 0.2px;
+  }
+
+  .card-linked {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    font-family: 'Inter', sans-serif;
+    font-size: 11px; color: var(--ink-dim);
+    display: flex; align-items: center; gap: 6px;
+    flex-wrap: wrap;
+  }
+  .card-linked-label {
+    font-weight: 600; color: var(--ink-light);
+    font-size: 10px; letter-spacing: 0.3px;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .linked-person {
+    color: var(--blue);
+    font-weight: 500;
+    background: var(--blue-soft);
+    border: 1px solid rgba(29,78,216,0.18);
+    padding: 2px 9px; border-radius: 20px;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── HOW IT WORKS ── */
+  .how-section {
+    background: var(--paper);
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    padding: 64px 40px;
+    position: relative; z-index: 1;
+  }
+  .how-inner {
+    max-width: 1100px; margin: 0 auto;
+  }
+  .how-steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 40px;
+    margin-top: 36px;
+  }
+  .step {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .step-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    color: var(--red);
+    letter-spacing: 1px;
+  }
+  .step-title {
+    font-family: 'Lora', serif;
+    font-size: 17px; font-weight: 600;
+    color: var(--ink);
+  }
+  .step-desc {
+    font-family: 'Lora', serif;
+    font-size: 14px; line-height: 1.75;
+    color: var(--ink-light);
+  }
+
+  /* ── FINAL CTA ── */
+  .cta-section {
+    max-width: 1100px; margin: 0 auto;
+    padding: 80px 40px 100px;
+    text-align: center;
+    position: relative; z-index: 1;
+  }
+  .cta-section h2 {
+    font-family: 'Lora', serif;
+    font-size: clamp(26px, 3.5vw, 38px);
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+    color: var(--ink);
+    margin-bottom: 16px;
+  }
+  .cta-section h2 em { font-style: italic; color: var(--red); }
+  .cta-section p {
+    font-family: 'Lora', serif;
+    font-size: 16px; line-height: 1.8;
+    color: var(--ink-light);
+    max-width: 520px;
+    margin: 0 auto 36px;
+  }
+
+  /* ── FOOTER BAR ── */
+  .site-footer {
+    border-top: 1px solid var(--rule);
+    padding: 20px 40px;
+    display: flex; align-items: center;
+    justify-content: space-between;
+    max-width: 1100px; margin: 0 auto;
+    position: relative; z-index: 1;
+  }
+  .site-footer .logo-small {
+    font-family: 'Lora', serif;
+    font-size: 13px; font-weight: 600;
+    color: var(--ink-dim);
+    text-decoration: none;
+  }
+  .site-footer .logo-small em { font-style: italic; color: var(--red); opacity: 0.7; }
+  .site-footer small {
+    font-family: 'Inter', sans-serif;
+    font-size: 10px; color: var(--ink-dim);
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 820px) {
+    .hero { grid-template-columns: 1fr; padding: 56px 24px 48px; }
+    .hero-visual { display: none; }
+    .how-steps { grid-template-columns: 1fr; }
+    .cards-section, .how-section, .cta-section { padding-left: 24px; padding-right: 24px; }
+    .topbar { padding: 0 24px; }
+    .nav-links { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <a class="logo" href="index.html">Annotate<em>Her</em></a>
+  <ul class="nav-links">
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#omitted">Who's missing</a></li>
+  </ul>
+  <a class="btn-nav" href="upload.html">Upload Text</a>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-text">
+    <p class="hero-eyebrow">Omission Analysis Engine</p>
+    <h1 class="hero-title">
+      The names they<br>left <em>out</em>.
+    </h1>
+    <p class="hero-sub">
+      Upload any historical or scientific text. AnnotateHer surfaces the women whose contributions were erased — mapping who was credited, what was discovered, and who was forgotten.
+    </p>
+    <div class="hero-cta-group">
+      <a class="btn-upload" href="upload.html">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload Text
+      </a>
+      <p class="hero-note">Accepts .txt or .md files.<br>Analysis runs instantly in your browser.</p>
+    </div>
+  </div>
+
+  <!-- Floating node visualization -->
+  <div class="hero-visual" aria-hidden="true">
+    <svg id="connectors">
+      <!-- lines drawn by JS -->
+    </svg>
+    <!-- Watson → DNA → Rosalind cluster -->
+    <div class="node-float mentioned" id="nWatson" style="top:28px;left:10px;animation-delay:0.1s">
+      Watson<span class="node-sub">mentioned</span>
+    </div>
+    <div class="node-float concept" id="nDNA" style="top:22px;left:175px;animation-delay:0.3s">
+      Photo 51<span class="node-sub">concept</span>
+    </div>
+    <div class="node-float missing" id="nFranklin" style="top:10px;left:315px;animation-delay:0.55s">
+      Rosalind Franklin<span class="node-sub">omitted</span>
+    </div>
+
+    <!-- Hahn → fission → Meitner cluster -->
+    <div class="node-float mentioned" id="nHahn" style="top:128px;left:0px;animation-delay:0.15s">
+      Hahn<span class="node-sub">mentioned</span>
+    </div>
+    <div class="node-float concept" id="nFission" style="top:122px;left:150px;animation-delay:0.4s">
+      nuclear fission<span class="node-sub">concept</span>
+    </div>
+    <div class="node-float missing" id="nMeitner" style="top:110px;left:318px;animation-delay:0.65s">
+      Lise Meitner<span class="node-sub">omitted</span>
+    </div>
+
+    <!-- Russell → hydrogen → Cecilia cluster -->
+    <div class="node-float mentioned" id="nRussell" style="top:228px;left:8px;animation-delay:0.2s">
+      Russell<span class="node-sub">mentioned</span>
+    </div>
+    <div class="node-float concept" id="nHydrogen" style="top:222px;left:155px;animation-delay:0.45s">
+      stellar spectra<span class="node-sub">concept</span>
+    </div>
+    <div class="node-float missing" id="nCecilia" style="top:210px;left:310px;animation-delay:0.7s">
+      C. Payne-Gaposchkin<span class="node-sub">omitted</span>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- HOW IT WORKS -->
+<section class="how-section" id="how">
+  <div class="how-inner">
+    <p class="section-label">How it works</p>
+    <div class="how-steps">
+      <div class="step">
+        <span class="step-num">01</span>
+        <span class="step-title">Upload your text</span>
+        <p class="step-desc">Paste or upload any historical writing, textbook chapter, or scientific article as a .txt or .md file.</p>
+      </div>
+      <div class="step">
+        <span class="step-num">02</span>
+        <span class="step-title">Detection runs</span>
+        <p class="step-desc">AnnotateHer scans each paragraph for men credited with discoveries, then checks whether their female collaborators are named anywhere in the text.</p>
+      </div>
+      <div class="step">
+        <span class="step-num">03</span>
+        <span class="step-title">The graph appears</span>
+        <p class="step-desc">A live knowledge graph surfaces beside each flagged paragraph — showing the credited man, the concept, and the woman who was written out.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WOMEN CARDS -->
+<section class="cards-section" id="omitted">
+  <p class="section-label">Who's missing from the record</p>
+  <div class="cards-intro">
+    <p>These women made discoveries that shaped modern science. Their names rarely appear in the texts that describe those discoveries.</p>
+    <div class="cards-filter">
+      <button class="filter-btn active" onclick="filterCards('all', this)">All fields</button>
+      <button class="filter-btn" onclick="filterCards('physics', this)">Physics</button>
+      <button class="filter-btn" onclick="filterCards('biology', this)">Biology</button>
+      <button class="filter-btn" onclick="filterCards('computing', this)">Computing</button>
+      <button class="filter-btn" onclick="filterCards('astronomy', this)">Astronomy</button>
+    </div>
+  </div>
+  <div class="cards-grid" id="cardsGrid"></div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="cta-section">
+  <h2>Find who's missing<br>in <em>your</em> text.</h2>
+  <p>Drop in any scientific history, school chapter, or Wikipedia export. See the omissions mapped in real time.</p>
+  <a class="btn-upload" href="upload.html">
+    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    Upload Text
+  </a>
+</section>
+
+<footer style="border-top:1px solid var(--rule);">
+  <div class="site-footer">
+    <a class="logo-small" href="index.html">Annotate<em>Her</em></a>
+    <small>A tool for surfacing erasure in historical and scientific writing.</small>
+  </div>
+</footer>
+
+<script>
+// ── KNOWLEDGE BASE (subset from index.html) ──
+const WOMEN_KB = [
+  {
+    name: "Rosalind Franklin",
+    contribution_type: "primary_discoverer",
+    field: "biology",
+    connected_concepts: ["DNA double helix", "Photo 51", "X-ray diffraction"],
+    connected_people: ["Watson", "Crick", "Wilkins"],
+    common_erasure_pattern: "Credited as technician rather than co-discoverer; Watson mocked her in The Double Helix."
+  },
+  {
+    name: "Lise Meitner",
+    contribution_type: "co-discoverer",
+    field: "physics",
+    connected_concepts: ["nuclear fission", "radioactivity", "uranium"],
+    connected_people: ["Otto Hahn", "Fritz Strassmann"],
+    common_erasure_pattern: "Hahn won the Nobel Prize for fission; Meitner was excluded despite being co-discoverer."
+  },
+  {
+    name: "Cecilia Payne-Gaposchkin",
+    contribution_type: "primary_discoverer",
+    field: "astronomy",
+    connected_concepts: ["stellar composition", "hydrogen abundance", "stellar spectra"],
+    connected_people: ["Henry Norris Russell", "Harlow Shapley"],
+    common_erasure_pattern: "Russell dismissed her finding that stars are mostly hydrogen, then later published it as his own conclusion."
+  },
+  {
+    name: "Nettie Stevens",
+    contribution_type: "primary_discoverer",
+    field: "biology",
+    connected_concepts: ["sex chromosomes", "XY sex determination", "Y chromosome"],
+    connected_people: ["Edmund Beecher Wilson", "Thomas Hunt Morgan"],
+    common_erasure_pattern: "Wilson received credit for the discovery of sex chromosomes despite Stevens' earlier independent work."
+  },
+  {
+    name: "Hedy Lamarr",
+    contribution_type: "inventor",
+    field: "computing",
+    connected_concepts: ["frequency hopping", "spread spectrum", "Wi-Fi", "GPS"],
+    connected_people: ["George Antheil", "Marconi"],
+    common_erasure_pattern: "Remembered as an actress rather than an inventor; her patent expired before the military adopted her technology."
+  },
+  {
+    name: "Jocelyn Bell Burnell",
+    contribution_type: "primary_discoverer",
+    field: "astronomy",
+    connected_concepts: ["pulsars", "neutron stars", "radio telescope"],
+    connected_people: ["Antony Hewish", "Martin Ryle"],
+    common_erasure_pattern: "Discovered pulsars as a PhD student; her supervisor Hewish won the Nobel Prize while she was excluded."
+  },
+  {
+    name: "Chien-Shiung Wu",
+    contribution_type: "primary_discoverer",
+    field: "physics",
+    connected_concepts: ["parity violation", "beta decay", "weak nuclear force"],
+    connected_people: ["Tsung-Dao Lee", "Chen-Ning Yang"],
+    common_erasure_pattern: "Lee and Yang won the Nobel for predicting parity violation; Wu, who experimentally proved it, was not included."
+  },
+  {
+    name: "Ada Lovelace",
+    contribution_type: "primary_discoverer",
+    field: "computing",
+    connected_concepts: ["first algorithm", "Analytical Engine", "computer programming"],
+    connected_people: ["Charles Babbage"],
+    common_erasure_pattern: "Consistently framed as Babbage's assistant rather than the author of the first computer algorithm."
+  },
+  {
+    name: "Grace Hopper",
+    contribution_type: "inventor",
+    field: "computing",
+    connected_concepts: ["COBOL", "first compiler", "debugging"],
+    connected_people: ["Howard Aiken", "John von Neumann"],
+    common_erasure_pattern: "Her contributions to programming languages were often attributed to male colleagues or to institutions broadly."
+  },
+  {
+    name: "Vera Rubin",
+    contribution_type: "primary_discoverer",
+    field: "astronomy",
+    connected_concepts: ["dark matter", "galaxy rotation curves", "spiral galaxies"],
+    connected_people: ["Kent Ford", "Fritz Zwicky"],
+    common_erasure_pattern: "Never received the Nobel Prize despite dark matter being one of the most significant astrophysics discoveries of the century."
+  },
+  {
+    name: "Inge Lehmann",
+    contribution_type: "primary_discoverer",
+    field: "physics",
+    connected_concepts: ["Earth's inner core", "seismic waves", "P-wave discontinuity"],
+    connected_people: ["Beno Gutenberg", "Charles Richter"],
+    common_erasure_pattern: "Discovered that Earth has a solid inner core; almost entirely absent from Earth science textbooks."
+  },
+  {
+    name: "Henrietta Swan Leavitt",
+    contribution_type: "primary_discoverer",
+    field: "astronomy",
+    connected_concepts: ["Cepheid variable stars", "period-luminosity relationship", "cosmic distance ladder"],
+    connected_people: ["Edwin Hubble", "Edward Pickering"],
+    common_erasure_pattern: "Hubble used her method to measure the universe's size without crediting her discovery."
+  },
+];
+
+// ── RENDER CARDS ──
+function renderCards(filter) {
+  const grid = document.getElementById("cardsGrid");
+  const data = filter === "all" ? WOMEN_KB : WOMEN_KB.filter(w => w.field === filter);
+  grid.innerHTML = "";
+  data.forEach((woman, i) => {
+    const card = document.createElement("div");
+    card.className = "woman-card";
+    card.dataset.field = woman.field;
+    card.style.animationDelay = `${i * 60}ms`;
+
+    const conceptTags = woman.connected_concepts.slice(0, 3)
+      .map(c => `<span class="concept-tag">${c}</span>`).join("");
+
+    const linkedPeople = woman.connected_people.slice(0, 3)
+      .map(p => `<span class="linked-person">${p}</span>`).join("");
+
+    card.innerHTML = `
+      <div class="card-field">Omitted scientist</div>
+      <div class="card-name">${woman.name}</div>
+      <div class="card-type">${woman.contribution_type.replace(/_/g, " ")}</div>
+      <div class="card-erasure">${woman.common_erasure_pattern}</div>
+      <div class="card-concepts">${conceptTags}</div>
+      <div class="card-linked">
+        <span class="card-linked-label">Credited instead:</span>
+        ${linkedPeople}
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function filterCards(field, btn) {
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  renderCards(field);
+}
+
+renderCards("all");
+
+// ── DRAW SVG CONNECTOR LINES IN HERO ──
+function drawHeroLines() {
+  const svg = document.getElementById("connectors");
+  svg.innerHTML = "";
+
+  const pairs = [
+    ["nWatson",  "nDNA"],
+    ["nDNA",     "nFranklin"],
+    ["nHahn",    "nFission"],
+    ["nFission", "nMeitner"],
+    ["nRussell", "nHydrogen"],
+    ["nHydrogen","nCecilia"],
+  ];
+
+  const visual = document.querySelector(".hero-visual");
+  const vr = visual.getBoundingClientRect();
+
+  pairs.forEach(([aId, bId], idx) => {
+    const a = document.getElementById(aId);
+    const b = document.getElementById(bId);
+    if (!a || !b) return;
+    const ar = a.getBoundingClientRect();
+    const br = b.getBoundingClientRect();
+
+    const x1 = ar.right  - vr.left;
+    const y1 = ar.top + ar.height / 2 - vr.top;
+    const x2 = br.left   - vr.left;
+    const y2 = br.top + br.height / 2 - vr.top;
+
+    const isMissing = bId.startsWith("nFranklin") || bId.startsWith("nMeitner") || bId.startsWith("nCecilia");
+
+    const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+    line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+    line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+    line.setAttribute("stroke", isMissing ? "rgba(185,28,28,0.3)" : "rgba(91,33,182,0.25)");
+    line.setAttribute("stroke-width", "1.5");
+    line.setAttribute("stroke-dasharray", isMissing ? "5 3" : "none");
+    svg.appendChild(line);
+  });
+}
+
+// Wait for fonts + layout, then draw
+window.addEventListener("load", () => {
+  setTimeout(drawHeroLines, 400);
+});
+window.addEventListener("resize", () => setTimeout(drawHeroLines, 100));
+</script>
+</body>
+</html>

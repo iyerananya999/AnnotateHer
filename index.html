@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AnnotateHer</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  :root {
+    --bg:#f9f7f3; --paper:#fdfcfa; --ink:#1c1c1c; --ink-light:#5a5a5a;
+    --ink-dim:#aaa; --rule:#e5e1d8;
+    --col-mentioned:#1d4ed8; --col-missing:#b91c1c; --col-concept:#5b21b6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Lora',Georgia,serif;background:var(--bg);color:var(--ink);}
+
+  .topbar{position:sticky;top:0;z-index:200;height:52px;background:var(--paper);border-bottom:1px solid var(--rule);display:flex;align-items:center;padding:0 28px;gap:16px;box-shadow:0 1px 6px rgba(0,0,0,0.05);}
+  .logo{font-family:'Lora',serif;font-size:17px;font-weight:600;letter-spacing:-0.3px;color:var(--ink);margin-right:auto;text-decoration:none;}
+  .logo em{font-style:italic;color:var(--col-missing);}
+  .doc-chip{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--bg);border:1px solid var(--rule);color:var(--ink-dim);padding:3px 10px;border-radius:20px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .legend{display:flex;align-items:center;gap:14px;font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-light);}
+  .leg{display:flex;align-items:center;gap:5px;}
+  .leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+  .btn-upload{font-family:'Inter',sans-serif;font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;background:none;color:var(--ink-light);border:1px solid var(--rule);padding:6px 14px;border-radius:5px;cursor:pointer;text-decoration:none;transition:border-color 0.2s,color 0.2s;}
+  .btn-upload:hover{border-color:var(--ink-light);color:var(--ink);}
+
+  .status-pill{display:none;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--col-concept);background:rgba(91,33,182,0.07);border:1px solid rgba(91,33,182,0.2);padding:3px 12px;border-radius:20px;}
+  .status-pill.show{display:flex;}
+  .status-dot{width:6px;height:6px;border-radius:50%;background:var(--col-concept);animation:blink 1.2s ease-in-out infinite;}
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:0.2;}}
+
+  .page{position:relative;max-width:1100px;margin:0 auto;padding:56px 4px 140px;}
+
+  .text-body{max-width:680px;}
+  .doc-label{font-family:'Inter',sans-serif;font-size:10px;font-weight:500;letter-spacing:1.8px;text-transform:uppercase;color:var(--ink-dim);margin-bottom:10px;}
+  h1.doc-title{font-family:'Lora',serif;font-size:26px;font-weight:600;line-height:1.22;letter-spacing:-0.4px;margin-bottom:32px;color:var(--ink);}
+  .section-head{font-family:'Inter',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:1.8px;text-transform:uppercase;color:var(--ink-dim);margin:32px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--rule);}
+  .para{font-size:15px;line-height:1.85;color:#2c2c2c;margin-bottom:20px;position:relative;transition:padding-left 0.4s ease,border-color 0.4s ease;border-left:2.5px solid transparent;}
+  .para.flagged{padding-left:14px;border-left-color:#c97316;}
+  .nm{color:var(--col-mentioned);font-weight:600;border-bottom:1.5px solid rgba(29,78,216,0.25);}
+  .para.awaiting::after{content:'';position:absolute;right:-18px;top:50%;transform:translateY(-50%);width:7px;height:7px;border-radius:50%;background:var(--col-concept);opacity:0.5;animation:blink 1.4s ease-in-out infinite;}
+
+  #graph-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
+  #graph-canvas .n-group{pointer-events:all;cursor:pointer;}
+
+  .tip{position:fixed;z-index:999;background:#111;color:#f5f5f5;font-family:'Inter',sans-serif;font-size:12px;line-height:1.65;padding:13px 16px;border-radius:8px;max-width:280px;pointer-events:none;opacity:0;transition:opacity 0.15s;box-shadow:0 8px 32px rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.07);}
+  .tip.show{opacity:1;}
+  .tip-name{font-size:13px;font-weight:700;margin-bottom:4px;font-family:'Lora',serif;color:#fff;}
+  .tip-type{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#f97316;margin-bottom:8px;letter-spacing:0.5px;text-transform:uppercase;}
+  .tip-erasure{color:#fca5a5;font-size:11px;font-style:italic;line-height:1.6;}
+
+  .footer{position:fixed;bottom:0;left:0;right:0;z-index:200;height:76px;background:var(--paper);border-top:2px solid var(--rule);display:flex;align-items:center;padding:0 32px;gap:20px;box-shadow:0 -4px 24px rgba(0,0,0,0.09);}
+  .f-left{display:flex;flex-direction:column;justify-content:center;gap:3px;flex-shrink:0;min-width:130px;}
+  .f-label{font-family:'Inter',sans-serif;letter-spacing:1.4px;text-transform:uppercase;font-size:9px;font-weight:700;color:var(--ink-dim);}
+  .f-omit{font-family:'JetBrains Mono',monospace;color:var(--col-missing);font-size:14px;font-weight:600;white-space:nowrap;}
+  .f-track-wrap{flex:1;display:flex;flex-direction:column;gap:6px;}
+  .f-track{width:100%;height:36px;background:var(--rule);border-radius:8px;overflow:hidden;display:flex;box-shadow:inset 0 1px 4px rgba(0,0,0,0.1);}
+  .f-women{height:100%;background:var(--col-missing);width:0%;transition:width 1.6s cubic-bezier(0.4,0,0.2,1);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:13px;color:white;font-weight:700;white-space:nowrap;overflow:hidden;min-width:0;letter-spacing:0.4px;}
+  .f-men{height:100%;background:var(--col-mentioned);flex:1;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:13px;color:white;font-weight:700;white-space:nowrap;letter-spacing:0.4px;}
+  .f-sublabels{display:flex;justify-content:space-between;padding:0 2px;}
+  .f-sublabel{font-family:'Inter',sans-serif;font-size:10px;font-weight:500;}
+  .f-sublabel.women{color:var(--col-missing);}
+  .f-sublabel.men{color:var(--col-mentioned);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="logo" href="upload.html">Annotate<em>Her</em></a>
+  <span class="doc-chip" id="docChip">Loading...</span>
+  <div class="status-pill" id="statusPill">
+    <span class="status-dot"></span>
+    <span id="statusText">Analyzing...</span>
+  </div>
+  <div class="legend">
+    <div class="leg"><div class="leg-dot" style="background:var(--col-mentioned)"></div>mentioned</div>
+    <div class="leg"><div class="leg-dot" style="background:var(--col-missing)"></div>omitted</div>
+    <div class="leg"><div class="leg-dot" style="background:var(--col-concept)"></div>concept</div>
+  </div>
+  <a class="btn-upload" href="upload.html">New upload</a>
+</div>
+
+<div class="page" id="page">
+  <div class="text-body" id="textBody"></div>
+  <svg id="graph-canvas"></svg>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<div class="footer">
+  <div class="f-left">
+    <span class="f-label">Gender Representation</span>
+    <span class="f-omit" id="fOmit">awaiting analysis</span>
+  </div>
+  <div class="f-track-wrap">
+    <div class="f-track">
+      <div class="f-women" id="fWomen"></div>
+      <div class="f-men" id="fMen">men 100%</div>
+    </div>
+    <div class="f-sublabels">
+      <span class="f-sublabel women">Women scientists</span>
+      <span class="f-sublabel men">Men scientists</span>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp }                       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, off } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const app = initializeApp({ databaseURL: "https://lostinhistory-default-rtdb.firebaseio.com" });
+const db  = getDatabase(app);
+
+const SESSION_ID = sessionStorage.getItem("lh_sessionId")
+  || ("demo_" + Math.random().toString(36).slice(2, 8));
+
+const WOMEN_KB = [
+  { name:"Rosalind Franklin",     contribution_type:"primary_discoverer",  connected_concepts:["DNA double helix","Photo 51","B-form DNA","A-form DNA","X-ray diffraction","crystallography","helix"],            connected_people:["Watson","Crick","Wilkins","Gosling"],                                     common_erasure_pattern:"Credited as technician rather than co-discoverer; Watson mocked her in The Double Helix" },
+  { name:"Lise Meitner",          contribution_type:"co-discoverer",        connected_concepts:["nuclear fission","radioactivity","protactinium","fission","uranium","neutron"],                                   connected_people:["Otto Hahn","Hahn","Fritz Strassmann","Strassmann","Niels Bohr","Bohr"],    common_erasure_pattern:"Hahn won Nobel Prize for fission; Meitner excluded despite being co-discoverer" },
+  { name:"Cecilia Payne-Gaposchkin", contribution_type:"primary_discoverer", connected_concepts:["stellar composition","hydrogen abundance","stellar classification","stellar spectra","hydrogen","helium","stars"], connected_people:["Henry Norris Russell","Russell","Harlow Shapley","Shapley","Arthur Eddington","Eddington"], common_erasure_pattern:"Russell initially dismissed her finding that stars are mostly hydrogen, later published it as his own conclusion" },
+  { name:"Nettie Stevens",        contribution_type:"primary_discoverer",  connected_concepts:["sex chromosomes","XY sex determination","chromosomal theory of heredity","X chromosome","Y chromosome","chromosome"], connected_people:["Edmund Beecher Wilson","Wilson","Thomas Hunt Morgan","Morgan","McClung"], common_erasure_pattern:"Wilson received credit for discovery of sex chromosomes despite Stevens' earlier independent discovery" },
+  { name:"Hedy Lamarr",           contribution_type:"inventor",             connected_concepts:["frequency hopping","spread spectrum","WiFi","Wi-Fi","GPS","Bluetooth","wireless","radio"],                         connected_people:["George Antheil","Antheil","Marconi"],                                    common_erasure_pattern:"Remembered as actress, not inventor; patent expired before military adopted her technology" },
+  { name:"Katherine Johnson",     contribution_type:"essential_contributor",connected_concepts:["lunar orbit","Apollo 11","Friendship 7","trajectory calculations","orbital mechanics"],                            connected_people:["John Glenn","Alan Shepard","Dorothy Vaughan","Mary Jackson"],           common_erasure_pattern:"NASA's Black women computers entirely omitted from space race narratives for decades" },
+  { name:"Emmy Noether",          contribution_type:"primary_discoverer",  connected_concepts:["Noether's theorem","abstract algebra","ring theory","conservation laws","symmetry"],                               connected_people:["Albert Einstein","Einstein","David Hilbert","Felix Klein"],              common_erasure_pattern:"Einstein called her the most significant creative mathematical genius yet she was barred from university positions" },
+  { name:"Ada Lovelace",          contribution_type:"primary_discoverer",  connected_concepts:["first algorithm","Analytical Engine","computer programming","looping","algorithm"],                                connected_people:["Charles Babbage","Babbage"],                                             common_erasure_pattern:"Framed as Babbage's assistant rather than first programmer" },
+  { name:"Grace Hopper",          contribution_type:"inventor",             connected_concepts:["COBOL","first compiler","debugging","machine-independent programming","compiler"],                                 connected_people:["Howard Aiken","John von Neumann"],                                        common_erasure_pattern:"Contributions to programming languages often attributed to male colleagues or institutions" },
+  { name:"Barbara McClintock",    contribution_type:"primary_discoverer",  connected_concepts:["transposons","jumping genes","genetic recombination","maize cytogenetics","genetics"],                             connected_people:["Thomas Hunt Morgan","Morgan","George Beadle"],                           common_erasure_pattern:"Ignored for 30 years before Nobel Prize; male geneticists dismissed her transposon findings" },
+  { name:"Chien-Shiung Wu",       contribution_type:"primary_discoverer",  connected_concepts:["parity violation","beta decay","Wu experiment","weak nuclear force","weak force"],                                 connected_people:["Tsung-Dao Lee","Chen-Ning Yang","Enrico Fermi","Fermi"],                  common_erasure_pattern:"Lee and Yang won Nobel for predicting parity violation; Wu who proved it experimentally was excluded" },
+  { name:"Vera Rubin",            contribution_type:"primary_discoverer",  connected_concepts:["dark matter","galaxy rotation curves","spiral galaxies","rotation","cosmology"],                                   connected_people:["Kent Ford","Fritz Zwicky","Margaret Burbidge"],                          common_erasure_pattern:"Never received Nobel despite dark matter being one of the most important astrophysics discoveries" },
+  { name:"Jocelyn Bell Burnell",  contribution_type:"primary_discoverer",  connected_concepts:["pulsars","neutron stars","radio telescope","pulsar","radio astronomy"],                                           connected_people:["Antony Hewish","Hewish","Martin Ryle"],                                  common_erasure_pattern:"Discovered pulsars as PhD student; supervisor Hewish won Nobel Prize, she was excluded" },
+  { name:"Margaret Hamilton",     contribution_type:"inventor",             connected_concepts:["Apollo flight software","software engineering","asynchronous systems","priority scheduling","Apollo"],             connected_people:["Neil Armstrong","Buzz Aldrin"],                                          common_erasure_pattern:"Apollo 11 software she wrote credited to NASA broadly; her role minimized for decades" },
+  { name:"Inge Lehmann",          contribution_type:"primary_discoverer",  connected_concepts:["Earth's inner core","seismic waves","P-wave discontinuity","inner core","seismology"],                             connected_people:["Beno Gutenberg","Charles Richter"],                                      common_erasure_pattern:"Discovered Earth has a solid inner core; almost entirely absent from Earth science textbooks" },
+  { name:"Marie Curie",           contribution_type:"primary_discoverer",  connected_concepts:["radioactivity","polonium","radium","X-ray units","radiation"],                                                    connected_people:["Pierre Curie","Henri Becquerel","Becquerel"],                             common_erasure_pattern:"Framed primarily as wife of Pierre Curie; second Nobel Prize in Chemistry often omitted" },
+  { name:"Mileva Maric",          contribution_type:"disputed_contributor", connected_concepts:["special relativity","Brownian motion","photoelectric effect","relativity"],                                       connected_people:["Albert Einstein","Einstein"],                                            common_erasure_pattern:"Einstein's first wife and collaborator; her contribution to his 1905 papers consistently minimized" },
+  { name:"Dorothy Hodgkin",       contribution_type:"primary_discoverer",  connected_concepts:["penicillin structure","insulin structure","vitamin B12 structure","X-ray crystallography","crystallography"],      connected_people:["John Bernal","Rosalind Franklin"],                                       common_erasure_pattern:"Nobel win headline described her as 'housewife wins Nobel Prize'" },
+  { name:"Henrietta Swan Leavitt",contribution_type:"primary_discoverer",  connected_concepts:["Cepheid variable stars","period-luminosity relationship","cosmic distance ladder","galaxy distances"],             connected_people:["Edward Pickering","Edwin Hubble","Hubble","Annie Jump Cannon"],           common_erasure_pattern:"Hubble used her method to measure universe's size without crediting her" },
+  { name:"Ida Noddack",           contribution_type:"co-discoverer",        connected_concepts:["rhenium discovery","nuclear fission prediction","element 75","fission prediction"],                               connected_people:["Walter Noddack","Otto Berg","Otto Hahn","Hahn"],                         common_erasure_pattern:"Predicted nuclear fission in 1934 but was dismissed; Hahn received credit for 1938 discovery" },
+  { name:"Esther Lederberg",      contribution_type:"co-discoverer",        connected_concepts:["lambda phage","bacterial conjugation","replica plating","F factor","genetics"],                                   connected_people:["Joshua Lederberg","George Beadle"],                                      common_erasure_pattern:"Husband Joshua won Nobel for work she co-developed; replica plating method rarely names her" },
+  { name:"Gerty Cori",            contribution_type:"co-discoverer",        connected_concepts:["Cori cycle","glycogen metabolism","glucose-1-phosphate","enzyme deficiency diseases","biochemistry"],             connected_people:["Carl Cori","Bernardo Houssay"],                                          common_erasure_pattern:"Worked alongside husband; universities refused to hire her as equal; Nobel Prize shared" },
+  { name:"Mary Anning",           contribution_type:"primary_discoverer",  connected_concepts:["ichthyosaur","plesiosaur","pterodactyl","Jurassic fossils","fossil","paleontology"],                               connected_people:["William Buckland","Georges Cuvier","William Conybeare"],                  common_erasure_pattern:"Male geologists published her discoveries under their own names; barred from Geological Society" },
+  { name:"Florence Nightingale",  contribution_type:"innovator",            connected_concepts:["polar area diagram","hospital sanitation","evidence-based medicine","data visualization","statistics"],           connected_people:["William Farr","Sidney Herbert"],                                         common_erasure_pattern:"Remembered as nurse, not statistician and data visualization pioneer" },
+  { name:"Henrietta Lacks",       contribution_type:"involuntary_contributor", connected_concepts:["HeLa cells","cell culture","polio vaccine","cancer research","cell biology"],                                 connected_people:["George Gey","Jonas Salk"],                                               common_erasure_pattern:"Cells taken without consent; identity hidden for decades; family not compensated" },
+];
+
+function detectGraph(text) {
+  const lower  = text.toLowerCase();
+  const nodes  = [];
+  const edges  = [];
+  const addedMen      = {};
+  const addedConcepts = {};
+  const addedEdges    = new Set();
+
+  WOMEN_KB.forEach((woman, wi) => {
+    const menPresent = woman.connected_people.filter(person =>
+      lower.includes(person.toLowerCase())
+    );
+    if (menPresent.length === 0) return;
+
+    const firstName = woman.name.split(" ")[0].toLowerCase();
+    const lastName  = woman.name.split(" ").slice(-1)[0].toLowerCase();
+    if (lower.includes(firstName) || lower.includes(lastName)) return;
+
+    const conceptsPresent = woman.connected_concepts.filter(c =>
+      lower.includes(c.toLowerCase())
+    );
+    const conceptsToUse = conceptsPresent.length > 0
+      ? conceptsPresent.slice(0, 2)
+      : woman.connected_concepts.slice(0, 2);
+
+    menPresent.slice(0, 2).forEach(person => {
+      const lastNameKey = person.split(" ").slice(-1)[0].toLowerCase();
+      const label = person.split(" ").slice(-1)[0];
+      if (!addedMen[lastNameKey]) {
+        const id = `m_${lastNameKey}`;
+        addedMen[lastNameKey] = id;
+        nodes.push({ id, label, type: "mentioned" });
+      }
+    });
+
+    conceptsToUse.forEach((concept) => {
+      const cLabel = concept.split(" ").slice(0, 3).join(" ");
+      if (!addedConcepts[concept]) {
+        const id = `c_${concept.toLowerCase().replace(/\s+/g, "_")}`;
+        addedConcepts[concept] = id;
+        nodes.push({ id, label: cLabel, type: "concept" });
+      }
+      const cId = addedConcepts[concept];
+      menPresent.slice(0, 2).forEach(person => {
+        const mId = addedMen[person.split(" ").slice(-1)[0].toLowerCase()];
+        if (mId) {
+          const sig = `${mId}->${cId}`;
+          if (!addedEdges.has(sig)) { addedEdges.add(sig); edges.push({ s: mId, t: cId, dash: false }); }
+        }
+      });
+    });
+
+    const wId = `w_${wi}`;
+    nodes.push({
+      id: wId, label: woman.name, type: "missing",
+      fullLabel: woman.name,
+      contribution_type: woman.contribution_type,
+      common_erasure_pattern: woman.common_erasure_pattern,
+    });
+
+    conceptsToUse.forEach(concept => {
+      const cId = addedConcepts[concept];
+      if (cId) {
+        const sig = `${cId}->${wId}`;
+        if (!addedEdges.has(sig)) { addedEdges.add(sig); edges.push({ s: cId, t: wId, dash: true }); }
+      }
+    });
+
+    menPresent.slice(0, 1).forEach(person => {
+      const mId = addedMen[person.split(" ").slice(-1)[0].toLowerCase()];
+      if (mId) {
+        const sig = `${mId}->${wId}`;
+        if (!addedEdges.has(sig)) { addedEdges.add(sig); edges.push({ s: mId, t: wId, dash: true }); }
+      }
+    });
+  });
+
+  return { nodes, edges };
+}
+
+const sentParas    = new Set();
+const drawnParas   = new Set();
+const listeners    = {};
+const omittedWomen = new Set();
+
+const C    = { mentioned:"#1d4ed8", missing:"#b91c1c", concept:"#5b21b6" };
+const FILL = { mentioned:"rgba(29,78,216,0.10)", missing:"rgba(185,28,28,0.10)", concept:"rgba(91,33,182,0.10)" };
+const ALL_MEN = [...new Set(WOMEN_KB.flatMap(w => w.connected_people))];
+
+function renderSections(sections, filename) {
+  const body = document.getElementById("textBody");
+  body.innerHTML = "";
+  document.getElementById("docChip").textContent = filename;
+
+  const lbl = document.createElement("div");
+  lbl.className = "doc-label";
+  lbl.textContent = "AnnotateHer - Omission Analysis";
+  body.appendChild(lbl);
+
+  const h1 = document.createElement("h1");
+  h1.className = "doc-title";
+  h1.textContent = filename.replace(/\.(txt|md)$/i, "");
+  body.appendChild(h1);
+
+  let idx = 0;
+  sections.forEach(sec => {
+    if (sec.heading) {
+      const sh = document.createElement("div");
+      sh.className = "section-head";
+      sh.textContent = sec.heading;
+      body.appendChild(sh);
+    }
+    sec.paragraphs.forEach(text => {
+      const p = document.createElement("p");
+      p.className = "para";
+      p.id = `p${idx}`;
+      let html = escHtml(text);
+      ALL_MEN.forEach(name => {
+        html = html.replace(
+          new RegExp(`\\b${escRe(name)}\\b`, "g"),
+          `<span class="nm">${name}</span>`
+        );
+      });
+      p.innerHTML = html;
+      body.appendChild(p);
+      idx++;
+    });
+  });
+}
+
+function escHtml(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function escRe(s)   { return s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
+
+function setupObserver() {
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const paraEl = entry.target;
+      const paraId = paraEl.id;
+      if (sentParas.has(paraId)) return;
+      sentParas.add(paraId);
+      handleParagraph(paraId, paraEl.innerText.trim());
+    });
+  }, { threshold: 0.25 });
+  document.querySelectorAll(".para").forEach(p => observer.observe(p));
+}
+
+function handleParagraph(paraId, text) {
+  const localResult = detectGraph(text);
+  if (localResult.nodes.length > 0) {
+    drawGroup(paraId, localResult);
+  }
+  const paraEl = document.getElementById(paraId);
+  if (paraEl && localResult.nodes.length === 0) {
+    paraEl.classList.add("awaiting");
+    showPill("Analyzing...");
+  }
+  set(ref(db, `current_paragraph/${SESSION_ID}`), {
+    paraId, text, sessionId: SESSION_ID,
+    timestamp: Date.now(), status: "pending",
+  }).catch(err => console.warn("Firebase write:", err));
+  listenForMLResult(paraId);
+}
+
+function listenForMLResult(paraId) {
+  if (listeners[paraId]) return;
+  const resultRef = ref(db, `results/${SESSION_ID}/${paraId}`);
+  const unsub = onValue(resultRef, snapshot => {
+    const result = snapshot.val();
+    if (!result) return;
+    off(resultRef);
+    delete listeners[paraId];
+    if (!drawnParas.has(paraId)) drawGroup(paraId, result);
+    const el = document.getElementById(paraId);
+    if (el) el.classList.remove("awaiting");
+    hidePill();
+  });
+  listeners[paraId] = unsub;
+}
+
+function showPill(msg) {
+  document.getElementById("statusPill").classList.add("show");
+  document.getElementById("statusText").textContent = msg;
+}
+function hidePill() {
+  if (!document.querySelector(".para.awaiting"))
+    document.getElementById("statusPill").classList.remove("show");
+}
+
+const svg = d3.select("#graph-canvas");
+
+function setSvgSize() {
+  const page = document.getElementById("page");
+  svg.attr("width", page.scrollWidth).attr("height", page.scrollHeight);
+}
+
+function getAnchor(paraId) {
+  const page = document.getElementById("page");
+  const para = document.getElementById(paraId);
+  if (!para || !page) return null;
+  const pr      = page.getBoundingClientRect();
+  const ar      = para.getBoundingClientRect();
+  const scrollY = window.scrollY || window.pageYOffset;
+  return {
+    x:       ar.right  - pr.left,
+    y:       (ar.top + ar.bottom) / 2 - pr.top + scrollY,   
+    yTop:    ar.top    - pr.top + scrollY,                   
+    yBottom: ar.bottom - pr.top + scrollY,                   
+  };
+}
+
+function measureLabel(label) {
+  const tmp = document.createElementNS("http://www.w3.org/2000/svg","svg");
+  tmp.style.cssText = "visibility:hidden;position:absolute;top:-9999px;left:-9999px;";
+  document.body.appendChild(tmp);
+  const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+  t.style.fontFamily = "Inter,sans-serif";
+  t.style.fontSize   = "12px";
+  t.style.fontWeight = "600";
+  t.textContent = label;
+  tmp.appendChild(t);
+  const w = t.getComputedTextLength();
+  document.body.removeChild(tmp);
+  return { rx: w / 2 + 12, ry: 13 };
+}
+
+function drawGroup(paraId, result) {
+  if (drawnParas.has(paraId)) return;
+  drawnParas.add(paraId);
+
+  const anchor = getAnchor(paraId);
+  if (!anchor) return;
+
+  const paraEl = document.getElementById(paraId);
+  if (paraEl) paraEl.classList.add("flagged");
+
+  const nodes = Array.isArray(result.nodes) ? result.nodes : [];
+  const edges = Array.isArray(result.edges) ? result.edges : [];
+  if (nodes.length === 0) return;
+
+  nodes.filter(n => n.type === "missing").forEach(n => omittedWomen.add(n.fullLabel || n.label));
+
+  const pageW       = document.getElementById("page").getBoundingClientRect().width;
+  const marginLeft  = anchor.x + 28;
+  const marginRight = pageW - 6;
+  const marginW     = Math.max(marginRight - marginLeft, 100);
+  const cx          = marginLeft + marginW / 2;
+
+  // ── Vertical bounds: strictly the paragraph's own top and bottom ──
+  const NODE_RY = 13;  // half-height of a node pill
+  const INSET   = 4;   // small breathing room so nodes don't clip the line
+  const yMin    = anchor.yTop    + NODE_RY + INSET;
+  const yMax    = anchor.yBottom - NODE_RY - INSET;
+  // Safe fallback centre — clamped in case paragraph is very short
+  const cy      = Math.max(yMin, Math.min(yMax, anchor.y));
+
+  nodes.forEach(n => { const m = measureLabel(n.label); n.rx = m.rx; n.ry = m.ry; });
+
+  const men      = nodes.filter(n => n.type === "mentioned");
+  const concepts = nodes.filter(n => n.type === "concept");
+  const women    = nodes.filter(n => n.type === "missing");
+
+  const zone = marginW / 3;
+  men.forEach((n, i)      => { n.x = marginLeft + zone*0 + zone/(men.length+1)      * (i+1); n.y = cy + (Math.random()-.5)*16; });
+  concepts.forEach((n, i) => { n.x = marginLeft + zone*1 + zone/(concepts.length+1) * (i+1); n.y = cy + (Math.random()-.5)*16; });
+  women.forEach((n, i)    => { n.x = marginLeft + zone*2 + zone/(women.length+1)    * (i+1); n.y = cy + (Math.random()-.5)*16; });
+
+  const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+  const links   = edges
+    .filter(e => nodeMap[e.s] && nodeMap[e.t])
+    .map(e => ({ source: nodeMap[e.s], target: nodeMap[e.t], dash: !!e.dash }));
+
+  const grp = svg.append("g");
+
+  const linkSel = grp.selectAll("line").data(links).enter().append("line")
+    .attr("stroke", d => {
+      if (d.target.type==="missing"||d.source.type==="missing") return C.missing;
+      if (d.source.type==="mentioned"&&d.target.type==="concept") return "#93c5fd";
+      return "#c4b5fd";
+    })
+    .attr("stroke-width", 1.5)
+    .attr("stroke-opacity", 0.55)
+    .attr("stroke-dasharray", d => d.dash ? "5 3" : "none");
+
+  const nodeG = grp.selectAll("g").data(nodes).enter().append("g")
+    .attr("class", "n-group")
+    .on("mouseover", showTip)
+    .on("mousemove", moveTip)
+    .on("mouseout",  hideTip);
+
+  nodeG.filter(d => d.type==="missing").append("rect")
+    .attr("x",  d => -(d.rx+8)).attr("y", d => -(d.ry+8))
+    .attr("width",  d => (d.rx+8)*2).attr("height", d => (d.ry+8)*2)
+    .attr("rx",10).attr("ry",10)
+    .attr("fill","rgba(185,28,28,0.06)")
+    .attr("stroke",C.missing).attr("stroke-width",0.8)
+    .attr("stroke-opacity",0.25).attr("stroke-dasharray","3 2");
+
+  const rects = nodeG.append("rect")
+    .attr("x",0).attr("y",0).attr("width",0).attr("height",0)
+    .attr("rx",7).attr("ry",7)
+    .attr("fill",   d => FILL[d.type])
+    .attr("stroke", d => C[d.type])
+    .attr("stroke-width", d => d.type==="missing" ? 2.2 : 1.6);
+
+  rects.transition().duration(420).delay((_,i) => i*70)
+    .attr("x",      d => -d.rx)
+    .attr("y",      d => -d.ry)
+    .attr("width",  d => d.rx*2)
+    .attr("height", d => d.ry*2);
+
+  nodeG.append("text")
+    .attr("text-anchor","middle").attr("dy","0.36em")
+    .text(d => d.label)
+    .style("font-family","'Inter',sans-serif")
+    .style("font-size","12px")
+    .style("font-weight","600")
+    .style("fill", d => C[d.type])
+    .style("pointer-events","none")
+    .attr("opacity",0)
+    .transition().duration(280).delay((_,i) => i*70+320)
+    .attr("opacity",1);
+
+  nodeG.filter(d => d.type==="missing").append("text")
+    .attr("text-anchor","middle")
+    .attr("dy", d => d.ry+12)
+    .text("omitted")
+    .style("font-family","'JetBrains Mono',monospace")
+    .style("font-size","9px")
+    .style("fill",C.missing).style("fill-opacity",0.6)
+    .style("pointer-events","none");
+
+  // ── Force sim: Y is attracted to paragraph midpoint and hard-clamped to paragraph bounds ──
+  const sim = d3.forceSimulation(nodes)
+    .force("link",    d3.forceLink(links).distance(80).strength(0.4))
+    .force("charge",  d3.forceManyBody().strength(-220))
+    .force("centerX", d3.forceX(cx).strength(0.04))
+    .force("centerY", d3.forceY(cy).strength(0.7))
+    .force("collide", d3.forceCollide(d => d.rx + 12));
+
+  sim.on("tick", () => {
+    nodes.forEach(n => {
+      // X: keep inside the right-hand margin column
+      n.x = Math.max(marginLeft + n.rx + 4, Math.min(marginRight - n.rx - 4, n.x));
+      // Y: clamp strictly within this paragraph's bounding box
+      n.y = Math.max(yMin, Math.min(yMax, n.y));
+    });
+    linkSel
+      .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+    nodeG.attr("transform", d => `translate(${d.x},${d.y})`);
+  });
+
+  setTimeout(() => sim.stop(), 5000);
+  updateFooter();
+}
+
+const tipEl = document.getElementById("tip");
+
+function showTip(event, d) {
+  if (d.type !== "missing") return;
+  tipEl.innerHTML = `
+    <div class="tip-name">${d.fullLabel || d.label}</div>
+    <div class="tip-type">${(d.contribution_type||"").replace(/_/g," ")}</div>
+    <div class="tip-erasure">${d.common_erasure_pattern||""}</div>`;
+  tipEl.classList.add("show");
+  moveTip(event);
+}
+function moveTip(event) {
+  let x = event.clientX+16, y = event.clientY-12;
+  if (x+300 > window.innerWidth)  x = event.clientX-306;
+  if (y+120 > window.innerHeight) y = event.clientY-120;
+  tipEl.style.left = x+"px";
+  tipEl.style.top  = y+"px";
+}
+function hideTip() { tipEl.classList.remove("show"); }
+
+function updateFooter() {
+  const wCount = omittedWomen.size;
+  if (wCount === 0) return;
+  const wPct = Math.round((wCount/(wCount+8))*100);
+  const mPct = 100-wPct;
+  document.getElementById("fWomen").style.width = `${wPct}%`;
+  document.getElementById("fWomen").textContent = `${wPct}% women`;
+  document.getElementById("fMen").textContent   = `${mPct}% men`;
+  document.getElementById("fOmit").textContent  = `${wCount} women omitted`;
+}
+
+const DEMO_SECTIONS = [
+  { heading:"Chapter 3: The Structure of DNA", paragraphs:[
+    "In 1953, James Watson and Francis Crick published their landmark paper in Nature, proposing that DNA takes the form of a double helix. Their model elegantly explained how genetic information could be stored and copied — the two strands of the helix could separate, each serving as a template for a new complementary strand. Watson and Crick's insight built upon earlier work establishing that DNA, not protein, was the carrier of genetic information. Maurice Wilkins, working at King's College London, had been studying DNA fibers using X-ray diffraction techniques, and his crystallographic data provided critical physical evidence for the helical structure. The famous Photo 51, an X-ray diffraction image of extraordinary clarity, revealed the unmistakable signature of a helix and allowed Watson and Crick to refine the dimensions of their model.",
+  ]},
+  { heading:"Chapter 7: Nuclear Fission and the Atomic Age", paragraphs:[
+    "The discovery of nuclear fission in 1938 fundamentally transformed both physics and world history. Otto Hahn, working at the Kaiser Wilhelm Institute in Berlin, bombarded uranium atoms with neutrons and observed that the uranium nucleus had split into lighter elements. Hahn published his radiochemical findings, and the theoretical explanation soon followed. For this discovery, Otto Hahn was awarded the 1944 Nobel Prize in Chemistry.",
+  ]},
+  { heading:"Chapter 12: Stellar Composition and the Hydrogen Universe", paragraphs:[
+    "For much of the early twentieth century, astronomers assumed that the Sun and other stars were composed of roughly the same mixture of elements found on Earth. Henry Norris Russell, one of the most influential astrophysicists of the era, championed this position throughout the 1920s. It was not until later analyses of stellar spectra that the scientific community came to accept a radically different picture: stars are composed overwhelmingly of hydrogen and helium.",
+  ]},
+  { heading:"Chapter 9: Sex Determination and Chromosomal Theory", paragraphs:[
+    "The mechanism by which biological sex is determined was a major puzzle in early genetics. Edmund Beecher Wilson and Clarence Erwin McClung were among the key figures investigating the relationship between chromosomes and sex. The identification of the X and Y chromosomes was a breakthrough that connected cytology to Mendelian genetics. Thomas Hunt Morgan later expanded on this chromosomal theory through his experiments with Drosophila fruit flies.",
+  ]},
+  { heading:"Chapter 15: The Evolution of Wireless Communication", paragraphs:[
+    "Modern wireless communication rests on a foundation of innovations stretching back over a century. Guglielmo Marconi's successful transatlantic radio transmission in 1901 proved that electromagnetic waves could carry information across vast distances without wires. The concept of spread-spectrum communication — in which a signal is broadcast across a rapidly changing sequence of frequencies — emerged as a powerful solution. By the late twentieth century, these ideas had been adapted into protocols underlying modern technologies including Wi-Fi, Bluetooth, and GPS navigation systems.",
+  ]},
+];
+
+window.addEventListener("load", () => {
+  const sectionsRaw = sessionStorage.getItem("lh_sections");
+  const filename    = sessionStorage.getItem("lh_filename") || "The History of Scientific Discoveries";
+  sessionStorage.removeItem("lh_sections");
+  sessionStorage.removeItem("lh_filename");
+  sessionStorage.removeItem("lh_sessionId");
+  let sections = DEMO_SECTIONS;
+  if (sectionsRaw) { try { sections = JSON.parse(sectionsRaw); } catch(e) {} }
+  renderSections(sections, filename);
+  setSvgSize();
+  setupObserver();
+});
+
+window.addEventListener("resize", setSvgSize);
+</script>
+</body>
+</html>
