@@ -8,7 +8,7 @@ AnnotateHER analyzes textbooks to detect missing and misrepresented women — su
 
 ![AnnotateHER Screenshot](AnnotateHer-Dashboard.png)
 
-*Caption: The AnnotateHER dashboard showing the force-directed knowledge graph and completeness score for an analyzed textbook.*
+*The AnnotateHER dashboard showing the force-directed knowledge graph and completeness score for an analyzed textbook.*
 
 ---
 
